@@ -41,7 +41,7 @@ public class ClassTransformer implements IClassTransformer {
 			init = true;
 			if (classExists("org.spongepowered.mod.SpongeCoremod")) {
 				enabled = false;
-				log.info("Albedo detected; Patching aborted :D");
+				log.info("Mixins detected; Patching aborted :D");
 			}
 			else if (classExists("optifine.OptiFineForgeTweaker")) {
 				enabled = false;
@@ -49,7 +49,7 @@ public class ClassTransformer implements IClassTransformer {
 			}
 			else if (classExists("elucent.albedo.asm.ASMTransformer")) {
 				enabled = false;
-				log.info("Mixins detected; Patching aborted :D");
+				log.info("Albedo detected; Patching aborted :D");
 			}
 		}
 		return enabled;

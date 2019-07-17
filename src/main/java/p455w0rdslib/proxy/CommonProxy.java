@@ -50,19 +50,6 @@ public class CommonProxy {
 
 	public void postInit(final FMLPostInitializationEvent e) {
 		MinecraftForge.TERRAIN_GEN_BUS.register(LibEvents.class);
-
-		/*GameRegistry.registerWorldGenerator((rand, x, z, world, chunkGenerator, chunkProvider) -> {
-			final int i = 8;
-			rand.setSeed(world.getSeed());
-			for (int l = x - i; l <= x + i; ++l) {
-				for (int i1 = z - i; i1 <= z + i; ++i1) {
-					for (int y = 0; y <= 255; y++) {
-						final BlockPos p = new BlockPos(l, y, i1);
-						MinecraftForge.TERRAIN_GEN_BUS.post(new BlockGenEvent(world, p, world.getBlockState(p)));
-					}
-				}
-			}
-		}, Integer.MAX_VALUE);*/
 	}
 
 	public boolean isSMP() {

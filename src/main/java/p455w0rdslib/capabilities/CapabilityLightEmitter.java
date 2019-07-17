@@ -2,6 +2,7 @@ package p455w0rdslib.capabilities;
 
 import java.util.*;
 
+import net.minecraft.item.ItemBlock;
 import org.apache.commons.lang3.tuple.Pair;
 
 import net.minecraft.block.Block;
@@ -232,30 +233,26 @@ public class CapabilityLightEmitter {
 	//Pair.of(color, Pair.of(radius,brightness))
 	private static final Map<Item, Pair<Integer, Pair<Float, Float>>> ITEM_COLOR_MAP = new HashMap<>();
 	private static final Map<Block, Pair<Integer, Pair<Float, Float>>> BLOCK_COLOR_MAP = new HashMap<>();
+	private static final Pair<Integer, Pair<Float, Float>> EMPTY = Pair.of(0x0, Pair.of(0.0f, 0.0f));
 
 	public static Pair<Integer, Pair<Float, Float>> getColorForBlock(final Block block) {
-		if (block != null && BLOCK_COLOR_MAP.containsKey(block)) {
-			return BLOCK_COLOR_MAP.get(block);
+		if (BLOCK_COLOR_MAP.isEmpty()) {
+			genColorMap();
 		}
-		return Pair.of(0x0, Pair.of(0.0f, 0.0f));
+
+		return BLOCK_COLOR_MAP.getOrDefault(block, EMPTY);
 	}
 
 	public static Pair<Integer, Pair<Float, Float>> getColorForStack(final ItemStack stack) {
 		if (BLOCK_COLOR_MAP.isEmpty()) {
 			genColorMap();
 		}
-		int meta = stack.getMetadata();
-		if (meta >= 16) {
-			meta = 0;
+
+		if (stack.getItem() instanceof ItemBlock) {
+			final Block block = Block.getBlockFromItem(stack.getItem());
+			return BLOCK_COLOR_MAP.getOrDefault(block, EMPTY);
 		}
-		final Block block = Block.getBlockFromItem(stack.getItem());
-		if (block != null && BLOCK_COLOR_MAP.containsKey(block)) {
-			return BLOCK_COLOR_MAP.get(block);
-		}
-		if (ITEM_COLOR_MAP.containsKey(stack.getItem())) {
-			return ITEM_COLOR_MAP.get(stack.getItem());
-		}
-		return Pair.of(0x0, Pair.of(0.0f, 0.0f));
+		return ITEM_COLOR_MAP.getOrDefault(stack.getItem(), EMPTY);
 	}
 
 	private static void genColorMap() {

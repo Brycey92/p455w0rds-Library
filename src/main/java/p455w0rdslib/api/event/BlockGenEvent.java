@@ -9,6 +9,7 @@ import net.minecraftforge.fml.common.eventhandler.Event;
  * @author p455w0rd
  *
  */
+@Deprecated
 public class BlockGenEvent extends Event {
 
 	private final World world;

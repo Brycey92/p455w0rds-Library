@@ -1,5 +1,6 @@
 package p455w0rdslib;
 
+import net.minecraft.world.IWorldEventListener;
 import org.lwjgl.input.Keyboard;
 
 import com.google.common.collect.Lists;
@@ -40,13 +41,16 @@ import p455w0rdslib.api.IChunkLoadable;
 import p455w0rdslib.api.client.ItemRenderingRegistry;
 import p455w0rdslib.api.client.shader.IBlockLightEmitter;
 import p455w0rdslib.api.client.shader.LightHandler;
-import p455w0rdslib.api.event.BlockGenEvent;
+import p455w0rdslib.api.event.IChunkListeningWorldEventListener;
 import p455w0rdslib.capabilities.CapabilityChunkLoader;
 import p455w0rdslib.capabilities.CapabilityChunkLoader.ProviderTE;
 import p455w0rdslib.capabilities.CapabilityLightEmitter;
 import p455w0rdslib.handlers.BrightnessHandler;
 import p455w0rdslib.integration.Albedo;
+import p455w0rdslib.util.BlockChangeListener;
 import p455w0rdslib.util.ContributorUtils;
+
+import java.util.Collections;
 
 /**
  * @author p455w0rd
@@ -147,26 +151,30 @@ public class LibEvents {
 		}
 	}
 
+	private static void attachChunkLoader(TileEntity tile) {
+		if (tile instanceof IChunkLoadable) {
+			if (tile.hasCapability(CapabilityChunkLoader.CAPABILITY_CHUNKLOADER_TE, null)) {
+				final IChunkLoadable chunkLoader = (IChunkLoadable) tile;
+				tile.getCapability(CapabilityChunkLoader.CAPABILITY_CHUNKLOADER_TE, null).attachChunkLoader(chunkLoader.getModInstance());
+			}
+		}
+	}
+
+	private static void detachChunkLoader(TileEntity tile) {
+		if (tile instanceof IChunkLoadable) {
+			if (tile.hasCapability(CapabilityChunkLoader.CAPABILITY_CHUNKLOADER_TE, null)) {
+				final IChunkLoadable chunkLoader = (IChunkLoadable) tile;
+				tile.getCapability(CapabilityChunkLoader.CAPABILITY_CHUNKLOADER_TE, null).detachChunkLoader(chunkLoader.getModInstance());
+			}
+		}
+	}
+
 	@SubscribeEvent
 	public static void onPlace(final PlaceEvent e) {
 		final World world = e.getWorld();
 		final BlockPos pos = e.getPos();
 		if (world != null && pos != null) {
-			if (world.getTileEntity(pos) != null) {
-				final TileEntity tile = world.getTileEntity(pos);
-				if (tile instanceof IChunkLoadable) {
-					if (tile.hasCapability(CapabilityChunkLoader.CAPABILITY_CHUNKLOADER_TE, null)) {
-						final IChunkLoadable chunkLoader = (IChunkLoadable) tile;
-						tile.getCapability(CapabilityChunkLoader.CAPABILITY_CHUNKLOADER_TE, null).attachChunkLoader(chunkLoader.getModInstance());
-					}
-				}
-			}
-			if (e.getPlacedBlock().getBlock() instanceof IBlockLightEmitter) {
-				LightHandler.addCachedPos(world, pos);
-			}
-			else if (CapabilityLightEmitter.getColorForBlock(e.getState().getBlock()).getLeft() != 0x0) {
-				LightHandler.addCachedPos(world, pos);
-			}
+			attachChunkLoader(world.getTileEntity(pos));
 		}
 	}
 
@@ -174,20 +182,8 @@ public class LibEvents {
 	public static void blockBreak(final BreakEvent e) {
 		final World world = e.getWorld();
 		final BlockPos pos = e.getPos();
-		if (world != null && pos != null && world.getTileEntity(pos) != null) {
-			final TileEntity tile = world.getTileEntity(pos);
-			if (tile instanceof IChunkLoadable) {
-				if (tile.hasCapability(CapabilityChunkLoader.CAPABILITY_CHUNKLOADER_TE, null)) {
-					final IChunkLoadable chunkLoader = (IChunkLoadable) tile;
-					tile.getCapability(CapabilityChunkLoader.CAPABILITY_CHUNKLOADER_TE, null).detachChunkLoader(chunkLoader.getModInstance());
-				}
-			}
-		}
-		if (e.getState().getBlock() instanceof IBlockLightEmitter) {
-			LightHandler.removeCachedPositions(e.getWorld(), Lists.newArrayList(e.getPos()));
-		}
-		else if (CapabilityLightEmitter.getColorForBlock(e.getState().getBlock()).getLeft() != 0x0) {
-			LightHandler.removeCachedPositions(e.getWorld(), Lists.newArrayList(e.getPos()));
+		if (world != null && pos != null) {
+			detachChunkLoader(world.getTileEntity(pos));
 		}
 	}
 
@@ -235,54 +231,58 @@ public class LibEvents {
 		}
 	}
 
+	@SideOnly(Side.CLIENT)
 	@SubscribeEvent(priority = EventPriority.LOWEST)
-	public static void onMapGen(final InitMapGenEvent event) {
-		switch (event.getType()) {
-		case NETHER_BRIDGE:
-		case END_CITY:
-			return;
-		default:
-			//event.setNewGen(new BlockGenDetector(event.getOriginalGen()));
-			break;
+	public static void onWorldLoad(final WorldEvent.Load event) {
+		if (event.getWorld().isRemote && LibShaders.areShadersEnabled() && ConfigOptions.ENABLE_SHADERS) {
+			event.getWorld().addEventListener(new BlockChangeListener(event.getWorld()) {
+				@Override
+				protected boolean isMatchingBlock(IBlockState state) {
+					Block b = state.getBlock();
+					return (b instanceof IBlockLightEmitter || CapabilityLightEmitter.getColorForBlock(b).getLeft() != 0x0);
+				}
+
+				@Override
+				protected void onBlockAdded(BlockPos pos, IBlockState state) {
+					Block b = state.getBlock();
+					if (b instanceof IBlockLightEmitter) {
+						LightHandler.addCachedPos(world, pos);
+					} else if (CapabilityLightEmitter.getColorForBlock(b).getLeft() != 0x0) {
+						LightHandler.addCachedPos(world, pos);
+					}
+				}
+
+				@Override
+				protected void onBlockRemoved(BlockPos pos, IBlockState state) {
+					LightHandler.removeCachedPositions(world, Collections.singletonList(pos));
+				}
+			});
 		}
 	}
 
 	@SubscribeEvent
 	public static void onChunkLoad(final ChunkEvent.Load event) {
-		final Chunk c = event.getChunk();
-		final ChunkPos cPos = c.getPos();
-		for (int x = cPos.getXStart(); x < cPos.getXEnd(); x++) {
-			for (int z = cPos.getZStart(); z < cPos.getZEnd(); z++) {
-				for (int y = 0; y <= 255; y++) {
-					final IBlockState state = c.getBlockState(new BlockPos(x, y, z));
-					if (state != null) {
-						MinecraftForge.TERRAIN_GEN_BUS.post(new BlockGenEvent(event.getWorld(), new BlockPos(x, y, z), state));
-					}
-				}
+		for (IWorldEventListener listener : event.getWorld().eventListeners) {
+			if (listener instanceof IChunkListeningWorldEventListener) {
+				((IChunkListeningWorldEventListener) listener).onChunkLoad(event.getWorld(), event.getChunk());
 			}
+		}
+
+		for (TileEntity tile : event.getChunk().getTileEntityMap().values()) {
+			attachChunkLoader(tile);
 		}
 	}
 
 	@SubscribeEvent
-	public static void onBlockGen(final BlockGenEvent event) {
-		final IBlockState state = event.getState();
-		final World world = event.getWorld();
-		final BlockPos pos = event.getPos();
-		if (state != null) {
-			final Block b = event.getState().getBlock();
-			if (event.getPos() != null) {
-				if (b instanceof IBlockLightEmitter) {
-					LightHandler.addCachedPos(event.getWorld(), event.getPos());
-				}
-				else if (b != null) {
-					if (b instanceof IBlockLightEmitter) {
-						LightHandler.addCachedPos(world, pos);
-					}
-					else if (CapabilityLightEmitter.getColorForBlock(b).getLeft() != 0x0) {
-						LightHandler.addCachedPos(world, pos);
-					}
-				}
+	public static void onChunkUnload(final ChunkEvent.Unload event) {
+		for (IWorldEventListener listener : event.getWorld().eventListeners) {
+			if (listener instanceof IChunkListeningWorldEventListener) {
+				((IChunkListeningWorldEventListener) listener).onChunkUnload(event.getWorld(), event.getChunk());
 			}
+		}
+
+		for (TileEntity tile : event.getChunk().getTileEntityMap().values()) {
+			detachChunkLoader(tile);
 		}
 	}
 

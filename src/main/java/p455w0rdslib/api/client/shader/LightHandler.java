@@ -67,15 +67,16 @@ public class LightHandler {
 	};
 
 	public static void addLight(final Light l) {
+		if (l == null) {
+			return;
+		}
 		if (camPos.squareDistanceTo(l.x, l.y, l.z) > l.mag + ConfigOptions.SHADERS_MAX_DIST) {
 			return;
 		}
 		if (camera != null && !camera.isBoundingBoxInFrustum(new AxisAlignedBB(l.x - l.mag, l.y - l.mag, l.z - l.mag, l.x + l.mag, l.y + l.mag, l.z + l.mag))) {
 			return;
 		}
-		if (l != null) {
-			lights.add(l);
-		}
+		lights.add(l);
 	}
 
 	public static Light getLightForEntity(final Entity entity) {
@@ -96,14 +97,12 @@ public class LightHandler {
 		frameId = 0;
 		final int max = Math.min(lights.size(), ConfigOptions.MAX_LIGHTS);
 		for (int i = 0; i < max; i++) {
-			if (i < max) {
-				final Light l = lights.get(i);
-				LibShaders.getActiveShader().getUniform("lights[" + i + "].position").setFloat(l.x, l.y, l.z);
-				LibShaders.getActiveShader().getUniform("lights[" + i + "].color").setFloat(l.r, l.g, l.b, l.a / 2);
-				if (LibShaders.getActiveShader() == LibShaders.coloredLightShader) {
-					LibShaders.getActiveShader().getUniform("lights[" + i + "].rad").setFloat(l.sx, l.sy, l.sz);
-					LibShaders.getActiveShader().getUniform("lights[" + i + "].intensity").setFloat(l.l);
-				}
+			final Light l = lights.get(i);
+			LibShaders.getActiveShader().getUniform("lights[" + i + "].position").setFloat(l.x, l.y, l.z);
+			LibShaders.getActiveShader().getUniform("lights[" + i + "].color").setFloat(l.r, l.g, l.b, l.a / 2);
+			if (LibShaders.getActiveShader() == LibShaders.coloredLightShader) {
+				LibShaders.getActiveShader().getUniform("lights[" + i + "].rad").setFloat(l.sx, l.sy, l.sz);
+				LibShaders.getActiveShader().getUniform("lights[" + i + "].intensity").setFloat(l.l);
 			}
 		}
 	}
@@ -162,7 +161,7 @@ public class LightHandler {
 			}
 			final IBlockState state = world.getBlockState(pos);
 			final Block block = state.getBlock();
-			if (state == null || world.isAirBlock(pos)) {
+			if (state.getBlock().isAir(state, world, pos)) {
 				blocksToRemove.add(pos.toImmutable());
 			}
 			else {
@@ -171,7 +170,7 @@ public class LightHandler {
 				}
 				else {
 					final Pair<Integer, Pair<Float, Float>> color = CapabilityLightEmitter.getColorForBlock(block);
-					if (color.getLeft() != 0x0 && state != null) {
+					if (color.getLeft() != 0x0) {
 						final Vec3i c = RenderUtils.hexToRGB(color.getLeft());
 						toAdd.add(Light.builder().pos(pos.up()).color(c.getX(), c.getY(), c.getZ(), color.getRight().getRight()).radius(color.getRight().getLeft()).intensity(5.0f).build());
 					}
@@ -188,22 +187,7 @@ public class LightHandler {
 
 	private static ArrayList<BlockPos> getBlockListForWorld(final World world) {
 		final String dim = world.provider.getDimensionType().getName();
-		if (isCached(dim)) {
-			return CACHED_BLOCKLIST.get(dim);
-		}
-		final ArrayList<BlockPos> empty = new ArrayList<>();
-		CACHED_BLOCKLIST.put(dim, empty);
-		return empty;
-	}
-
-	private static boolean isCached(final String dimName) {
-		final Map<String, ArrayList<BlockPos>> currentCache = new HashMap<>(CACHED_BLOCKLIST);
-		for (final String cachedDim : currentCache.keySet()) {
-			if (dimName.equals(cachedDim)) {
-				return true;
-			}
-		}
-		return false;
+		return CACHED_BLOCKLIST.computeIfAbsent(dim, (a) -> new ArrayList<>());
 	}
 
 	public static void addCachedPos(final World world, final BlockPos pos) {
@@ -211,16 +195,7 @@ public class LightHandler {
 	}
 
 	public static void removeCachedPositions(final World world, final List<BlockPos> positions) {
-		final List<BlockPos> newList = new ArrayList<>();
-		final ArrayList<BlockPos> worldBlocks = getBlockListForWorld(world);
-		for (final BlockPos p : positions) {
-			if (worldBlocks.contains(p)) {
-				continue;
-			}
-			newList.add(p);
-		}
-		worldBlocks.clear();
-		worldBlocks.addAll(newList);
+		getBlockListForWorld(world).removeAll(positions);
 	}
 
 }
